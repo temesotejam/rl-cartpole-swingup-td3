@@ -1,0 +1,70 @@
+name: Train RL Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: Training length
+        required: true
+        default: normal
+        type: choice
+        options: [quick, normal, long]
+      seed:
+        description: Random seed
+        required: true
+        default: "42"
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - ".github/training-trigger/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: train-cartpole-swingup-td3-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      PYTHONUNBUFFERED: "1"
+      MPLBACKEND: Agg
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      TRAIN_PRESET: ${{ inputs.preset || 'normal' }}
+      TRAIN_SEED: ${{ inputs.seed || '42' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install CPU PyTorch
+        run: python -m pip install "torch==2.8.0" --index-url https://download.pytorch.org/whl/cpu
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Show training request
+        run: |
+          echo "algorithm=TD3"
+          echo "preset=${TRAIN_PRESET}"
+          echo "seed=${TRAIN_SEED}"
+      - name: Train and evaluate
+        run: python -m src.train --preset "${TRAIN_PRESET}" --seed "${TRAIN_SEED}" --output-dir results
+      - name: Add result to job summary
+        if: always()
+        run: |
+          if [ -f results/summary.md ]; then cat results/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload models, videos, plots and metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cartpole-swingup-td3-${{ env.TRAIN_PRESET }}-seed-${{ env.TRAIN_SEED }}-run-${{ github.run_number }}
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
