@@ -1,0 +1,124 @@
+{
+  "environment": "custom-continuous-cartpole-swingup",
+  "algorithm": "TD3",
+  "comparison_targets": [
+    "temesotejam/rl-cartpole-swingup-ppo",
+    "temesotejam/rl-cartpole-swingup-sac"
+  ],
+  "preset": "normal",
+  "seed": 42,
+  "requested_total_timesteps": 400000,
+  "actual_final_timesteps": 400000,
+  "evaluation_seeds": [
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153
+  ],
+  "video_seed": 1041,
+  "physics": {
+    "gravity": 9.81,
+    "cart_mass_kg": 1.0,
+    "pole_mass_kg": 0.1,
+    "pole_com_length_m": 0.5,
+    "max_force_n": 10.0,
+    "cart_viscous_friction_n_per_mps": 0.1,
+    "motor_time_constant_s": 0.05,
+    "dt_s": 0.02,
+    "track_limit_m": 2.4,
+    "max_episode_s": 20.0
+  },
+  "sensor_noise": {
+    "enabled": true,
+    "position_noise_std_m": 0.001,
+    "position_bias_std_m": 0.002,
+    "velocity_noise_std_mps": 0.01,
+    "velocity_bias_std_mps": 0.01,
+    "angle_noise_std_deg": 0.25,
+    "angle_bias_std_deg": 1.0,
+    "gyro_noise_std_dps": 0.1,
+    "gyro_bias_std_dps": 0.3
+  },
+  "config": {
+    "total_timesteps": 400000,
+    "evaluation_episodes": 12,
+    "physics": {
+      "gravity": 9.81,
+      "cart_mass_kg": 1.0,
+      "pole_mass_kg": 0.1,
+      "pole_com_length_m": 0.5,
+      "max_force_n": 10.0,
+      "cart_viscous_friction_n_per_mps": 0.1,
+      "motor_time_constant_s": 0.05,
+      "dt_s": 0.02,
+      "track_limit_m": 2.4,
+      "max_episode_s": 20.0
+    },
+    "sensor_noise": {
+      "enabled": true,
+      "position_noise_std_m": 0.001,
+      "position_bias_std_m": 0.002,
+      "velocity_noise_std_mps": 0.01,
+      "velocity_bias_std_mps": 0.01,
+      "angle_noise_std_deg": 0.25,
+      "angle_bias_std_deg": 1.0,
+      "gyro_noise_std_dps": 0.1,
+      "gyro_bias_std_dps": 0.3
+    },
+    "td3": {
+      "learning_rate": 0.001,
+      "buffer_size": 500000,
+      "learning_starts": 5000,
+      "batch_size": 256,
+      "tau": 0.005,
+      "gamma": 0.99,
+      "train_freq": 1,
+      "gradient_steps": 1,
+      "action_noise_sigma": 0.2,
+      "policy_delay": 2,
+      "target_policy_noise": 0.2,
+      "target_noise_clip": 0.5,
+      "net_arch": [
+        256,
+        256
+      ]
+    },
+    "curriculum": [
+      {
+        "stage": "25_percent",
+        "reset_mode": "near_upright",
+        "fraction": 0.25
+      },
+      {
+        "stage": "50_percent",
+        "reset_mode": "wide",
+        "fraction": 0.5
+      },
+      {
+        "stage": "75_percent",
+        "reset_mode": "full",
+        "fraction": 0.75
+      },
+      {
+        "stage": "100_percent",
+        "reset_mode": "downward_mix",
+        "fraction": 1.0
+      }
+    ]
+  },
+  "versions": {
+    "gymnasium": "1.3.0",
+    "stable-baselines3": "2.9.0",
+    "torch": "2.8.0+cpu",
+    "numpy": "2.4.6"
+  },
+  "replay_buffer_retained_across_curriculum": true
+}
