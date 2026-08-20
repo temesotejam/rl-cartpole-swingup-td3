@@ -1,6 +1,6 @@
 {
-  "deployment_outcome": "skipped",
-  "page_url": "",
+  "deployment_outcome": "success",
+  "page_url": "https://temesotejam.github.io/rl-cartpole-swingup-td3/",
   "source_training_run_id": "32330524221",
   "pages_workflow_run_id": "32333375923"
 }
