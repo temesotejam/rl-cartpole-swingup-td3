@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUNBUFFERED: "1"
+      MPLBACKEND: Agg
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install CPU PyTorch
+        run: python -m pip install "torch==2.8.0" --index-url https://download.pytorch.org/whl/cpu
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run tests
+        run: python -m pytest -q
+      - name: Run quick end-to-end TD3 curriculum training
+        run: python -m src.train --preset quick --seed 42 --output-dir ci-results
+      - name: Verify training outputs
+        run: |
+          test -f ci-results/summary.md
+          test -f ci-results/metrics.csv
+          test -f ci-results/metadata.json
+          test -f ci-results/models/100_percent.zip
+          test -f ci-results/videos/00_random.mp4
+          test -f ci-results/videos/04_100_percent.mp4
+          test -f ci-results/plots/capture_rate.png
+          test -f ci-results/plots/final_stable_rate.png
+      - name: Build Pages dashboard smoke test
+        run: |
+          python web/build_pages.py --input ci-results --output site --run-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test -f site/index.html
+          test -f site/videos/04_100_percent.mp4
+          test -f site/plots/learning_curve.png
+      - name: Add summary
+        if: always()
+        run: |
+          if [ -f ci-results/summary.md ]; then cat ci-results/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload smoke result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rl-cartpole-swingup-td3-smoke-${{ github.run_number }}
+          path: ci-results/
+          retention-days: 14
+          if-no-files-found: warn

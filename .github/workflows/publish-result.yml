@@ -1,0 +1,46 @@
+name: Persist Training Summary
+
+on:
+  workflow_run:
+    workflows: ["Train RL Agent"]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  persist:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Download training artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          mkdir -p downloaded
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --dir downloaded
+      - name: Persist compact result
+        env:
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          META="$(find downloaded -type f -name metadata.json -print -quit)"
+          test -n "$META"
+          SRC="$(dirname "$META")"
+          DST="training-results/run-${RUN_NUMBER}"
+          mkdir -p "$DST"
+          cp "$SRC/summary.md" "$SRC/metrics.csv" "$SRC/metadata.json" "$DST/"
+          printf '# Training run %s\n\n- conclusion: success\n- workflow run id: %s\n- run URL: %s\n' "$RUN_NUMBER" "$RUN_ID" "$RUN_URL" > "$DST/run-info.md"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add training-results/
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Publish TD3 swing-up training result for run #${RUN_NUMBER} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

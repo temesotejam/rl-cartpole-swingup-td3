@@ -1,0 +1,4 @@
+preset=normal
+seed=42
+total_timesteps=400000
+comparison=PPO,SAC,TD3

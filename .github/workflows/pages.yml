@@ -1,0 +1,98 @@
+name: Publish Training Dashboard
+
+on:
+  workflow_run:
+    workflows: ["Train RL Agent"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Resolve training run
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            RUN_ID="$EVENT_RUN_ID"
+          else
+            RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "Train RL Agent" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          test -n "$RUN_ID"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "run_url=https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" >> "$GITHUB_OUTPUT"
+      - name: Download training artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          mkdir -p downloaded
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --dir downloaded
+      - name: Locate result
+        id: result
+        run: |
+          META="$(find downloaded -type f -name metadata.json -print -quit)"
+          test -n "$META"
+          echo "dir=$(dirname "$META")" >> "$GITHUB_OUTPUT"
+      - name: Build dashboard
+        run: |
+          python web/build_pages.py --input "${{ steps.result.outputs.dir }}" --output site --run-url "${{ steps.source.outputs.run_url }}"
+          test -f site/index.html
+          test -f site/videos/04_100_percent.mp4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Record deployment status
+        if: always()
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deployment.outcome }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = {
+              "deployment_outcome": os.environ.get("DEPLOY_OUTCOME", "unknown"),
+              "page_url": os.environ.get("PAGE_URL", ""),
+              "source_training_run_id": os.environ.get("SOURCE_RUN_ID", ""),
+              "pages_workflow_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+          }
+          Path(".github/pages-status.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/pages-status.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record TD3 Pages deployment status [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
